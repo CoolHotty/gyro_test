@@ -27,6 +27,9 @@
     #event-count {
       font-size: 1.2rem;
     }
+    .alert {
+      margin-top: 1rem;
+    }
   </style>
 </head>
 <body>
@@ -90,8 +93,10 @@
 
   // Update a specific field if the value is not null
   function updateField(field, value, precision = 2) {
-    if (value != null) {
-      field.textContent = value.toFixed(precision);
+    if (value !== null && value !== undefined) {
+      field.textContent = parseFloat(value).toFixed(precision);
+    } else {
+      field.textContent = 'N/A';
     }
   }
 
@@ -103,9 +108,9 @@
 
   // Handle device orientation data
   function handleOrientation(event) {
-    updateField(orientationAlpha, event.alpha);
-    updateField(orientationBeta, event.beta);
-    updateField(orientationGamma, event.gamma);
+    updateField(orientationAlpha, event.alpha, 2);
+    updateField(orientationBeta, event.beta, 2);
+    updateField(orientationGamma, event.gamma, 2);
     incrementEventCount();
   }
 
@@ -113,25 +118,29 @@
   function handleMotion(event) {
     const { acceleration, accelerationIncludingGravity, rotationRate } = event;
 
-    updateField(accelerationX, acceleration.x);
-    updateField(accelerationY, acceleration.y);
-    updateField(accelerationZ, acceleration.z);
+    updateField(accelerationX, acceleration.x, 3);
+    updateField(accelerationY, acceleration.y, 3);
+    updateField(accelerationZ, acceleration.z, 3);
 
-    updateField(accelerationGx, accelerationIncludingGravity.x);
-    updateField(accelerationGy, accelerationIncludingGravity.y);
-    updateField(accelerationGz, accelerationIncludingGravity.z);
+    updateField(accelerationGx, accelerationIncludingGravity.x, 3);
+    updateField(accelerationGy, accelerationIncludingGravity.y, 3);
+    updateField(accelerationGz, accelerationIncludingGravity.z, 3);
 
     if (rotationRate) {
-      updateField(gyroscopeBeta, rotationRate.beta);
-      updateField(gyroscopeGamma, rotationRate.gamma);
-      updateField(gyroscopeAlpha, rotationRate.alpha);
+      updateField(gyroscopeBeta, rotationRate.beta, 2);
+      updateField(gyroscopeGamma, rotationRate.gamma, 2);
+      updateField(gyroscopeAlpha, rotationRate.alpha, 2);
+    } else {
+      updateField(gyroscopeBeta, null);
+      updateField(gyroscopeGamma, null);
+      updateField(gyroscopeAlpha, null);
     }
 
     incrementEventCount();
   }
 
   // Toggle the demo state (start/stop)
-  toggleButton.addEventListener('click', (e) => {
+  toggleButton.addEventListener('click', async (e) => {
     e.preventDefault();
 
     if (isRunning) {
@@ -139,28 +148,55 @@
       window.removeEventListener('deviceorientation', handleOrientation);
       window.removeEventListener('devicemotion', handleMotion);
 
+      // Reset event count and sensor readings
+      eventCount = 0;
+      eventCountElement.textContent = eventCount;
+      [orientationAlpha, orientationBeta, orientationGamma,
+       accelerationX, accelerationY, accelerationZ,
+       accelerationGx, accelerationGy, accelerationGz,
+       gyroscopeBeta, gyroscopeGamma, gyroscopeAlpha].forEach(field => {
+        field.textContent = '0';
+      });
+
       // Update button state
       toggleButton.textContent = 'Start Demo';
       toggleButton.classList.remove('btn-danger');
       toggleButton.classList.add('btn-success');
       isRunning = false;
     } else {
-      // Request permission for iOS devices (if needed)
+      let permissionGranted = true;
+
+      // Request permission for device motion on iOS
       if (typeof DeviceMotionEvent.requestPermission === 'function') {
-        DeviceMotionEvent.requestPermission().catch((error) => {
-          console.error('Permission denied:', error);
-        });
+        try {
+          const permission = await DeviceMotionEvent.requestPermission();
+          if (permission !== 'granted') {
+            permissionGranted = false;
+            alert('Permission to access motion data was denied.');
+          }
+        } catch (error) {
+          permissionGranted = false;
+          console.error('Error requesting permission:', error);
+          alert('Failed to request permission for motion data.');
+        }
       }
 
-      // Start listening to events
-      window.addEventListener('deviceorientation', handleOrientation);
-      window.addEventListener('devicemotion', handleMotion);
+      if (permissionGranted) {
+        // Check if events are supported
+        if ('ondeviceorientation' in window && 'ondevicemotion' in window) {
+          // Start listening to events
+          window.addEventListener('deviceorientation', handleOrientation);
+          window.addEventListener('devicemotion', handleMotion);
 
-      // Update button state
-      toggleButton.textContent = 'Stop Demo';
-      toggleButton.classList.remove('btn-success');
-      toggleButton.classList.add('btn-danger');
-      isRunning = true;
+          // Update button state
+          toggleButton.textContent = 'Stop Demo';
+          toggleButton.classList.remove('btn-success');
+          toggleButton.classList.add('btn-danger');
+          isRunning = true;
+        } else {
+          alert('Device orientation and motion sensors are not supported on this device.');
+        }
+      }
     }
   });
 </script>
